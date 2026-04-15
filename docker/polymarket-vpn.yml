@@ -1,0 +1,46 @@
+# Polymarket Scraper - przez VPN (US IP)
+# Ten serwis łączy się z Polymarket API przez Wireguard VPN
+
+version: '3.8'
+
+services:
+  # VPN Client - musi być up wcześniej
+  wireguard:
+    image: linuxserver/wireguard
+    container_name: poly-vpn
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./config/wireguard:/config
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+    networks:
+      - vpn-network
+
+  # Scraper - działa przez VPN
+  polymarket-scraper:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: poly-scraper
+    network_mode: "service:wireguard"  # Cały ruch przez VPN
+    environment:
+      - POLYMARKET_API_URL=https://gamma-api.polymarket.com
+      - DATABASE_URL=sqlite:///data/bridge.db
+      - MODE=scraper
+    volumes:
+      - ../data:/app/data
+      - ../src:/app/src
+    depends_on:
+      - wireguard
+    command: python -m src.discovery.polymarket_sync
+    restart: unless-stopped
+
+networks:
+  vpn-network:
+    driver: bridge

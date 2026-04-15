@@ -1,0 +1,42 @@
+# IB Gateway - osobny compose, bez VPN
+# To serce łączności z Interactive Brokers - musi mieć polskie IP
+
+version: '3.8'
+
+services:
+  ib-gateway:
+    image: ghcr.io/unusualalpha/ib-gateway:latest
+    container_name: ib-gateway
+    environment:
+      TWS_USERID: ${IB_USER}
+      TWS_PASSWORD: ${IB_PASS}
+      TRADING_MODE: ${IB_TRADING_MODE:-paper}  # paper lub live
+      VNC_SERVER_PASSWORD: ${VNC_PASSWORD:-changeme}
+      API_PORT: 4002
+      # Ważne: bez VPN, direct routing
+    ports:
+      - "127.0.0.1:4002:4002"  # TWS API socket - dostęp tylko lokalnie
+      - "127.0.0.1:5900:5900"  # VNC - opcjonalnie do debugowania
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4002/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - ib-network
+
+  # Redis dla cache i message queue (opcjonalnie)
+  redis:
+    image: redis:7-alpine
+    container_name: ib-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - ib-network
+
+networks:
+  ib-network:
+    driver: bridge
+    # Brak external network = izolacja od VPN

@@ -1,0 +1,86 @@
+# Main Application - łączy wszystko razem
+# Ten compose uruchamia cały stack (bez VPN - zakładamy że VPN już działa)
+
+version: '3.8'
+
+services:
+  # Główna aplikacja bridge
+  bridge-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: polymarket-ib-bridge
+    environment:
+      # IB Connection
+      IB_GATEWAY_HOST: host.docker.internal  # lub IP VPS
+      IB_GATEWAY_PORT: 4002
+      IB_ACCOUNT_ID: ${IB_ACCOUNT_ID}
+      IB_TRADING_MODE: ${IB_TRADING_MODE:-paper}
+      
+      # Polymarket (bez VPN - zakładamy że scraper działa osobno)
+      POLYMARKET_API_URL: ${POLYMARKET_API_URL}
+      
+      # Database
+      DATABASE_URL: sqlite:///data/bridge.db
+      
+      # Risk Management
+      MAX_DAILY_LOSS_USD: ${MAX_DAILY_LOSS_USD:-100}
+      MAX_POSITION_SIZE_USD: ${MAX_POSITION_SIZE_USD:-50}
+      CIRCUIT_BREAKER_ERRORS: ${CIRCUIT_BREAKER_ERRORS:-5}
+      
+      # Trading Mode
+      PAPER_TRADING: ${PAPER_TRADING:-true}
+      AUTO_EXECUTION: ${AUTO_EXECUTION:-false}
+      
+    volumes:
+      - ../data:/app/data
+      - ../src:/app/src
+      - ../config:/app/config
+    ports:
+      - "127.0.0.1:8000:8000"  # API
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      sh -c "python -m src.discovery.ib_discovery && 
+             python -m src.api.server"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Scheduler - co 5 minut odświeża dane
+  scheduler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: bridge-scheduler
+    environment:
+      IB_GATEWAY_HOST: host.docker.internal
+      IB_GATEWAY_PORT: 4002
+      DATABASE_URL: sqlite:///data/bridge.db
+    volumes:
+      - ../data:/app/data
+      - ../src:/app/src
+    command: python scripts/scheduler.py
+    restart: unless-stopped
+    depends_on:
+      - bridge-app
+
+  # Optional: Telegram bot for alerts
+  telegram-bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: bridge-telegram
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      DATABASE_URL: sqlite:///data/bridge.db
+    volumes:
+      - ../data:/app/data
+    command: python scripts/telegram_alerts.py
+    restart: unless-stopped
+    profiles:
+      - with-alerts  # tylko gdy: docker-compose --profile with-alerts up
