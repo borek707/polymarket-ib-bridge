@@ -10,8 +10,8 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set
-from decimal import Decimal
+from typing import Callable, Dict, List, Optional, Set
+
 
 import aiohttp
 import websockets
@@ -113,7 +113,7 @@ class WhaleTracker:
         self.known_wallets: Set[str] = set()
         
         # Callbacki
-        self.on_signal: Optional[callable] = None
+        self.on_signal: Optional[Callable] = None
         
     async def initialize(self):
         """Inicjalizuje tracker - pobiera top wallets."""
@@ -456,7 +456,7 @@ class WhaleTrackerAdapter:
         """Obsługuje sygnał wieloryba."""
         # Przekonwertuj na TradeRecommendation jeśli ma sens dla IB
         if signal.signal_type == "ENTRY":
-            from src.notifications.manager import TradeRecommendation
+            from ...notifications.manager import TradeRecommendation
             
             rec = TradeRecommendation(
                 market_name=signal.position.market_question,

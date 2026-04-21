@@ -26,7 +26,7 @@ from src.discovery.ib_discovery import IBContractDiscovery
 from src.discovery.whale_detector import WhaleDetector, WhaleDirection
 from src.discovery.whale_tracker import WhaleTracker, WhaleTrackerAdapter, WhaleSignal
 from src.correlation.engine import CorrelationEngine
-from src.execution.live_trading import LiveTradingEngine, OrderSide
+from src.execution.live_trading import LiveExecutionEngine
 from src.risk.manager import RiskManager
 from src.notifications.manager import NotificationManager, TradeRecommendation
 
@@ -91,7 +91,7 @@ class LiveTrader:
             self.execution_engine = PaperTradingEngine()
             logger.info("📘 PAPER TRADING MODE (simulation)")
         else:
-            self.execution_engine = LiveTradingEngine()
+            self.execution_engine = LiveExecutionEngine()
             logger.info("💰 LIVE TRADING MODE (REAL MONEY!)")
         
         # Statystyki
@@ -209,7 +209,7 @@ class LiveTrader:
             return
             
         # Znajdź korelację z IB
-        corr = self.correlation_engine.correlate_single(market, ib_contracts)
+        corr = self.correlation_engine.find_correlation(market, ib_contracts)
         if not corr or corr.score < self.min_correlation_score:
             logger.info(f"   ⚠️  No IB correlation (score: {corr.score if corr else 0:.2f})")
             return
@@ -255,39 +255,31 @@ class LiveTrader:
     async def _execute_trade(self, rec: TradeRecommendation, market):
         """Wykonuje trade na IB."""
         # Risk check per trade
-        if not self.risk_manager.can_open_position(rec.ib_suggested_price * 100):
+        risk = self.risk_manager.check_all(rec.ib_suggested_price * 100)
+        if not risk.can_trade:
             logger.warning(f"   🚫 Risk limits prevent execution")
             return
             
         # Określ side
-        side = OrderSide.BUY if "BUY" in rec.action else OrderSide.SELL
+        side = "BUY" if "BUY" in rec.action else "SELL"
         
         # Wykonaj
         try:
             order = self.execution_engine.place_order(
                 poly_market_slug=rec.poly_slug,
-                poly_question=rec.market_name,
                 ib_conid=rec.ib_conid,
                 ib_symbol=rec.ib_symbol,
                 side=side,
                 quantity=100,  # $100 jeśli price ~$1
-                limit_price=rec.ib_suggested_price,
-                poly_price=rec.poly_price,
-                ib_bid=rec.ib_suggested_price - 0.01,
-                ib_ask=rec.ib_suggested_price + 0.01
+                limit_price=rec.ib_suggested_price
             )
             
             if order.status.value == "FILLED":
                 self.trades_executed += 1
-                logger.info(f"   ✅ EXECUTED: {order.filled_quantity} @ ${order.filled_price:.2f}")
+                logger.info(f"   ✅ EXECUTED: {order.quantity} @ ${order.filled_price:.2f}")
                 
                 # Powiadom o sukcesie
-                await self.notifier.telegram.send_message(
-                    f"✅ <b>TRADE EXECUTED</b>\n\n"
-                    f"{rec.ib_symbol}: {rec.action}\n"
-                    f"Price: ${order.filled_price:.2f}\n"
-                    f"Qty: {order.filled_quantity}"
-                )
+                await self.notifier.notify_opportunity(rec)
             else:
                 logger.info(f"   ❌ Order {order.status.value}")
                 

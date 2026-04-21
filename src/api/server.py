@@ -5,6 +5,7 @@ API Server - FastAPI dla dashboardu i zewnętrznych integracji.
 import os
 import sqlite3
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -86,7 +87,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # W produkcji: specific domains
+    allow_origins=os.getenv('ALLOWED_ORIGINS', 'http://localhost').split(','),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -239,7 +240,7 @@ def get_paper_portfolio():
     total_exposure = row['exposure'] or 0
     
     # Dzisiejsze statystyki
-    today = __import__('datetime').datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     cur = conn.execute("""
         SELECT realized_pnl, volume_traded, trades_count 
         FROM paper_pnl_daily WHERE date = ?

@@ -90,6 +90,7 @@ class LiveExecutionEngine:
     def disconnect(self):
         """Rozłącza się."""
         if self.connected:
+            self.ib.orderStatusEvent -= self._on_order_status
             self.ib.disconnect()
             self.connected = False
             logger.info("Disconnected from IB Gateway")
@@ -143,9 +144,8 @@ class LiveExecutionEngine:
         )
         
         # 4. Stwórz zlecenie
-        action = 'BUY' if side == 'BUY' else 'SELL'
         ib_order = IBOrder(
-            action=action,
+            action=side,
             totalQuantity=quantity,
             orderType='LMT',  # Limit order (tylko takie działają na Event Contracts)
             lmtPrice=limit_price,
@@ -194,7 +194,7 @@ class LiveExecutionEngine:
                 limit_price=limit_price,
                 status=LiveOrderStatus.FILLED if fill else LiveOrderStatus.PENDING,
                 filled_price=fill.execution.price if fill else None,
-                commission=fill.commissionReport.commission if fill and fill.commissionReport else None
+                commission=getattr(getattr(fill, 'commissionReport', None), 'commission', None) if fill else None
             )
             
             # Zapisz do bazy

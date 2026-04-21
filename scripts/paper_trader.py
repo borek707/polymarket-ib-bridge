@@ -170,9 +170,7 @@ class PaperTrader:
             return
             
         # Znajdź korelację z IB
-        from src.correlation.engine import MarketCorrelation
-        
-        corr = self.correlation_engine.correlate_single(market, ib_contracts)
+        corr = self.correlation_engine.find_correlation(market, ib_contracts)
         if not corr or corr.score < self.min_correlation_score:
             logger.info(f"   ⚠️  No high-confidence IB correlation (score: {corr.score if corr else 0:.2f})")
             return
@@ -195,7 +193,8 @@ class PaperTrader:
         logger.info(f"   📊 Poly price: ${target_price:.2f}, Est. IB price: ${estimated_ib_price:.2f}")
         
         # Risk check per trade
-        if not self.risk_manager.can_open_position(estimated_ib_price * 100):  # 100 contracts
+        risk = self.risk_manager.check_all(estimated_ib_price * 100)  # 100 contracts
+        if not risk.can_trade:
             logger.warning(f"   🚫 Risk limits prevent this trade")
             return
             
@@ -215,8 +214,8 @@ class PaperTrader:
         
         if order.status.value == "FILLED":
             self.trades_executed += 1
-            logger.info(f"   ✅ Paper trade EXECUTED: {order.filled_quantity} @ ${order.filled_price:.2f}")
-            logger.info(f"      Slippage: {order.slippage:.2f}% | Fee: ${order.fee_paid:.2f}")
+            logger.info(f"   ✅ Paper trade EXECUTED: {order.quantity} @ ${order.filled_price:.2f}")
+            logger.info(f"      Slippage: {order.slippage:.2f}% | Fee: ${order.fee_paid:.2f}" if order.fee_paid is not None else f"      Slippage: {order.slippage:.2f}%")
         else:
             logger.info(f"   ❌ Paper trade {order.status.value}")
             

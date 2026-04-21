@@ -13,7 +13,6 @@ import sqlite3
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-import numpy as np
 from rapidfuzz import fuzz, process
 
 
@@ -261,7 +260,9 @@ class CorrelationEngine:
             score = best_match[1] / 100.0
             
             # Znajdź kontrakt
-            ib_contract = next(c for c, n in ib_names if n == matched_name)
+            ib_contract = next((c for c, n in ib_names if n == matched_name), None)
+            if ib_contract is None:
+                return None
             
             return CorrelationResult(
                 poly_slug=market.slug,

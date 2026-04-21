@@ -50,7 +50,7 @@ class RiskManager:
         self.max_daily_loss = float(os.getenv('MAX_DAILY_LOSS_USD', 100))
         self.max_position_size = float(os.getenv('MAX_POSITION_SIZE_USD', 50))
         self.circuit_breaker_threshold = int(os.getenv('CIRCUIT_BREAKER_ERRORS', 5))
-        self.rate_limit = int(os.getenv('RATE_LIMIT_MSG_PER_SEC', 10))
+        self.rate_limit = int(os.getenv('RATE_LIMIT_MSG_PER_SEC') or '10')
         
         # Kill switch file
         self.kill_switch_file = Path('data/KILL_SWITCH')

@@ -178,9 +178,6 @@ class PolymarketDiscovery:
             
     async def get_market_by_slug(self, slug: str) -> Optional[PolymarketMarket]:
         """Pobiera konkretny market po slug."""
-        if not self.session:
-            self.session = aiohttp.ClientSession()
-            
         try:
             url = f"{self.API_URL}/markets/{slug}"
             async with self.session.get(url, timeout=10) as resp:

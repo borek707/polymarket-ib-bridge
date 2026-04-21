@@ -9,7 +9,7 @@ Architektura:
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 from enum import Enum
 
@@ -144,7 +144,7 @@ class ClobWhaleMonitor:
             url = f"{self.API_URL}/trades"
             params = {
                 "min_size": min_volume,
-                "since": (datetime.utcnow() - timedelta(minutes=lookback_minutes)).isoformat()
+                "since": (datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)).isoformat()
             }
             
             async with self.session.get(url, params=params, timeout=10) as resp:
@@ -313,16 +313,17 @@ class PublicAPIWhaleMonitor:
                 elif name == "no":
                     no_price = price
                     
+            # Jeśli nie mamy historii, nie możemy wykryć spike
+            if slug not in self.previous_volumes:
+                self.previous_volumes[slug] = current_volume
+                return None
+            
             # Oblicz volume spike
-            previous_volume = self.previous_volumes.get(slug, current_volume)
+            previous_volume = self.previous_volumes[slug]
             volume_delta = current_volume - previous_volume
             
             # Zapisz aktualny volume
             self.previous_volumes[slug] = current_volume
-            
-            # Jeśli nie mamy historii, nie możemy wykryć spike
-            if slug not in self.previous_volumes:
-                return None
                 
             # Szukaj volume spike > min_volume w krótkim czasie
             if volume_delta < min_volume:

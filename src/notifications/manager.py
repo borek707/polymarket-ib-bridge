@@ -67,7 +67,6 @@ class TradeRecommendation:
             return "HIGH - Low confidence, consider skipping"
     
     def _timestamp(self) -> str:
-        from datetime import datetime
         return datetime.now().strftime("%H:%M:%S")
 
 
@@ -249,7 +248,7 @@ class EmailNotifier:
     
     def __init__(self):
         self.smtp_host = os.getenv("SMTP_HOST")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_port = int(os.getenv("SMTP_PORT") or "587")
         self.smtp_user = os.getenv("SMTP_USER")
         self.smtp_pass = os.getenv("SMTP_PASS")
         self.to_email = os.getenv("ALERT_EMAIL")

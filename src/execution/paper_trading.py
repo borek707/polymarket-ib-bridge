@@ -58,6 +58,7 @@ class PaperOrder:
     
     # PnL (dla zamkniętych pozycji)
     realized_pnl: Optional[float] = None
+    fee_paid: Optional[float] = None
 
 
 class PaperTradingEngine:
@@ -201,6 +202,7 @@ class PaperTradingEngine:
         order.filled_price = round(filled_price, 4)
         order.filled_timestamp = datetime.now() + timedelta(seconds=self.fill_delay_seconds)
         order.slippage = round(slippage * 100, 2)  # w procentach
+        order.fee_paid = round(0.01 * order.quantity, 4)
         order.status = OrderStatus.FILLED
         
         return order
@@ -260,11 +262,14 @@ class PaperTradingEngine:
                     ''', (new_qty, round(new_avg, 4), position_id))
                 else:
                     # Zmniejsz pozycję (częściowe zamknięcie)
+                    closing_qty = min(order.quantity, current_qty)
                     new_qty = current_qty - order.quantity
+                    
+                    # Oblicz PnL tylko dla zamykanej części
+                    realized_pnl = (order.filled_price - current_avg) * closing_qty
                     
                     if new_qty <= 0:
                         # Zamknij całkowicie
-                        realized_pnl = (order.filled_price - current_avg) * order.quantity
                         conn.execute('''
                             UPDATE paper_positions 
                             SET quantity = 0, is_open = 0, closed_at = ?,
@@ -272,9 +277,10 @@ class PaperTradingEngine:
                             WHERE id = ?
                         ''', (datetime.now().isoformat(), realized_pnl, position_id))
                     else:
+                        # Aktualizuj pozycję i zapisz PnL
                         conn.execute('''
-                            UPDATE paper_positions SET quantity = ? WHERE id = ?
-                        ''', (new_qty, position_id))
+                            UPDATE paper_positions SET quantity = ?, realized_pnl = ? WHERE id = ?
+                        ''', (new_qty, realized_pnl, position_id))
             else:
                 # Nowa pozycja (tylko dla BUY)
                 if order.side == OrderSide.BUY:
